@@ -1,0 +1,5 @@
+database.json
+src/config.ts
+.env
+package-lock.json
+node_modules
