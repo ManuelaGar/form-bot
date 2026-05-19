@@ -13,7 +13,7 @@ A TypeScript-based automation bot that fills out Microsoft Forms for multiple us
 ## Prerequisites
 
 *   Node.js (v14 or higher)
-*   npm
+*   pnpm
 
 ## Installation
 
@@ -25,7 +25,7 @@ A TypeScript-based automation bot that fills out Microsoft Forms for multiple us
 
 2.  Install dependencies:
     ```bash
-    npm install
+    pnpm install
     ```
 
 ## Configuration
@@ -72,7 +72,7 @@ A TypeScript-based automation bot that fills out Microsoft Forms for multiple us
 To start the bot, run:
 
 ```bash
-npm start
+pnpm start
 ```
 
 The bot will launch a browser instance for each user in the database, fill out the form, submit it, and log the progress to the console.
