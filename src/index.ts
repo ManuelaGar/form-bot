@@ -41,47 +41,37 @@ async function main() {
         
         // Helper to find a question container by its text content
         const findQuestionByText = async (text: string) => {
-            // Use XPath to find a div with data-automation-id="questionItem" that contains the text
             const questionHandle = await page.evaluateHandle((searchText) => {
                 const allQuestions = Array.from(document.querySelectorAll('div[data-automation-id="questionItem"]'));
-                return allQuestions.find(q => q.textContent?.includes(searchText));
+                return allQuestions.find(q => q.textContent?.toLowerCase().includes(searchText.toLowerCase()));
             }, text) as unknown as ElementHandle<Element>;
             
             if (!questionHandle.asElement()) {
-                console.error(`Question with text "${text}" not found.`);
                 return null;
             }
             return questionHandle;
         };
 
-        // Helper to type in a text input associated with a question text
-        const answerTextInput = async (questionText: string, value: string) => {
-             const questionItem = await findQuestionByText(questionText);
-             if (!questionItem) return;
-
-             // Try to find the input using data-automation-id which is robust
+        // Helper to type in a text input associated with a question
+        const answerTextInput = async (questionItem: ElementHandle<Element>, questionText: string, value: string) => {
              let input = await questionItem.$('input[data-automation-id="textInput"]') as ElementHandle<Element> | null;
              
              if (!input) {
-                 // Fallback: try placeholder (English and Spanish) or generic text input
                  input = await questionItem.$('input[placeholder="Enter your answer"], input[placeholder="Escriba su respuesta"], input[type="text"], textarea') as ElementHandle<Element> | null;
              }
              
              if (input) {
+                 await input.click({ clickCount: 3 });
+                 await page.keyboard.press('Backspace');
                  await input.type(value);
              } else {
                  console.error(`No input found for question "${questionText}"`);
              }
         };
         
-        const answerRadioInput = async (questionText: string, value: string) => {
-            const questionItem = await findQuestionByText(questionText);
-            if (!questionItem) return;
-
-            // Find the element containing the text. It's usually a span or label.
+        const answerRadioInput = async (questionItem: ElementHandle<Element>, questionText: string, value: string) => {
             const optionElement = await questionItem.evaluateHandle((el, text) => {
                 const allElements = Array.from(el.querySelectorAll('span, label, div'));
-                // Find exact match or close match
                 return allElements.find(e => e.textContent?.trim() === text);
             }, value) as unknown as ElementHandle<Element>;
 
@@ -92,10 +82,7 @@ async function main() {
             }
         };
         
-         const answerRatingInput = async (questionText: string, rating: number) => {
-            const questionItem = await findQuestionByText(questionText);
-            if (!questionItem) return;
-
+        const answerRatingInput = async (questionItem: ElementHandle<Element>, questionText: string, rating: number) => {
             const ratingOption = await questionItem.evaluateHandle((el, ratingVal) => {
                 const elements = Array.from(el.querySelectorAll('span, div, label'));
                 return elements.find(e => {
@@ -108,7 +95,6 @@ async function main() {
             if (ratingOption && ratingOption.asElement()) {
                 await ratingOption.click();
             } else {
-                 // Fallback: try to find by index in the rating group
                  const options = await questionItem.$$('.rating-option, [role="radio"]');
                  if (options.length >= rating) {
                      await options[rating - 1].click();
@@ -118,90 +104,175 @@ async function main() {
             }
         };
 
-        // 1. Nombre y apellidos
-        await answerTextInput('Nombre y apellidos', person.fullName);
+        const questionsToFill = [
+          { type: 'text', text: 'Nombre y apellidos', value: person.fullName },
+          { type: 'radio', text: 'Tipo de documento', value: person.documentType },
+          { type: 'text', text: 'Numero de documento', value: person.documentNumber },
+          { type: 'text', text: 'Correo electronico', value: person.email },
+          { type: 'text', text: 'Cargo', value: person.jobTitle },
+          { type: 'text', text: 'Nit de la Empresa', value: person.companyNit },
+          { type: 'text', text: 'Nombre de la Empresa', value: person.companyName },
+          { type: 'text', text: '¿En qué departamento te encuentras actualmente?', value: person.department },
+          { type: 'text', text: 'Numero de celular', value: person.phoneNumber },
+          { type: 'radio', text: '¿Es usted una persona Sorda?', value: person.isDeaf },
+          { type: 'rating', text: 'capacidad del facilitador', value: person.ratings.facilitator },
+          { type: 'rating', text: 'formación te brindó las capacidades', value: person.ratings.trainingUtility },
+          { type: 'rating', text: 'herramientas de aprendizaje', value: person.ratings.tools },
+          { type: 'rating', text: 'satisfecho te has sentido con ARL SURA', value: person.ratings.arlSatisfaction },
+          { type: 'rating', text: 'satisfecho te sentiste con la formación', value: person.ratings.trainingSatisfaction },
+          { type: 'rating', text: 'fácil o difícil fue recibir la formación', value: person.ratings.difficulty },
+          { type: 'rating', text: 'probable es que recomiendes ARL SURA', value: person.ratings.recommendation },
+          { type: 'radio', text: 'autorizas a SURA', value: 'Acepto' }
+        ];
 
-        // 2. Tipo de documento
-        await answerRadioInput('Tipo de documento', person.documentType);
+        let completed = Array(questionsToFill.length).fill(false);
+        let attemptsRemaining = 15; // safety limit to prevent infinite loops
 
-        // 3. Numero de documento
-        await answerTextInput('Numero de documento', person.documentNumber);
+        while (completed.includes(false) && attemptsRemaining > 0) {
+            attemptsRemaining--;
+            let filledAnyOnThisPage = false;
 
-        // 4. Correo electronico
-        await answerTextInput('Correo electronico', person.email);
+            // 1. Try to fill any unanswered question that is currently visible
+            for (let i = 0; i < questionsToFill.length; i++) {
+                if (completed[i]) continue;
 
-        // 5. Cargo
-        await answerTextInput('Cargo', person.jobTitle);
+                const q = questionsToFill[i];
+                const questionItem = await findQuestionByText(q.text);
+                if (questionItem) {
+                    const isVisible = await page.evaluate((el) => {
+                        const rect = el.getBoundingClientRect();
+                        return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+                    }, questionItem);
 
-        // 6. Nit de la Empresa
-        await answerTextInput('Nit de la Empresa', person.companyNit);
-
-        // 7. Nombre de la Empresa
-        await answerTextInput('Nombre de la Empresa', person.companyName);
-
-        // 8. Departamento
-        await answerTextInput('¿En qué departamento te encuentras actualmente?', person.department);
-
-        // 9. Celular
-        await answerTextInput('Numero de celular', person.phoneNumber);
-
-        // 10. Sorda
-        await answerRadioInput('¿Es usted una persona Sorda?', person.isDeaf);
-
-        // 11. Facilitator Rating
-        await answerRatingInput('capacidad del facilitador', person.ratings.facilitator);
-
-        // 12. Training Utility
-        await answerRatingInput('formación te brindó las capacidades', person.ratings.trainingUtility);
-
-        // 13. Tools
-        await answerRatingInput('herramientas de aprendizaje', person.ratings.tools);
-
-        // 14. ARL Satisfaction
-        await answerRatingInput('satisfecho te has sentido con ARL SURA', person.ratings.arlSatisfaction);
-
-        // 15. Training Satisfaction
-        await answerRatingInput('satisfecho te sentiste con la formación', person.ratings.trainingSatisfaction);
-
-        // 16. Difficulty
-        await answerRatingInput('fácil o difícil fue recibir la formación', person.ratings.difficulty);
-
-        // 17. Recommendation
-        await answerRatingInput('probable es que recomiendes ARL SURA', person.ratings.recommendation);
-
-        // Authorization
-        await answerRadioInput('autorizas a SURA', "Acepto");
-
-        // Submit
-        // Find the submit button
-        const submitBtn = await page.$('button[data-automation-id="submitButton"]');
-        if (submitBtn) {
-            const currentUrl = page.url();
-            await submitBtn.click();
-            
-            // Wait for success message, error, or URL change
-            try {
-                await page.waitForFunction((initialUrl) => {
-                    return document.querySelector('div[data-automation-id="thankYouMessage"]') || 
-                           document.querySelector('.form-submit-error') || 
-                           window.location.href !== initialUrl;
-                }, { timeout: 20000 }, currentUrl);
-
-                const successMsg = await page.$('div[data-automation-id="thankYouMessage"]');
-                const errorMsg = await page.$('.form-submit-error');
-
-                if (page.url() !== currentUrl || successMsg) {
-                    console.log(`Successfully submitted for ${person.fullName}`);
-                } else if (errorMsg) {
-                    console.error(`Submission error for ${person.fullName}`);
-                    await page.screenshot({ path: `error-submit-${person.documentNumber}.png` });
-                } else {
-                    console.warn(`Timeout waiting for success/error after submit for ${person.fullName}`);
-                    await page.screenshot({ path: `error-timeout-${person.documentNumber}.png` });
+                    if (isVisible) {
+                        console.log(`Filling visible question: "${q.text}"`);
+                        try {
+                            if (q.type === 'text') {
+                                await answerTextInput(questionItem, q.text, q.value as string);
+                            } else if (q.type === 'radio') {
+                                await answerRadioInput(questionItem, q.text, q.value as string);
+                            } else if (q.type === 'rating') {
+                                await answerRatingInput(questionItem, q.text, q.value as number);
+                            }
+                            completed[i] = true;
+                            filledAnyOnThisPage = true;
+                        } catch (err) {
+                            console.error(`Error filling question "${q.text}":`, err);
+                        }
+                    }
                 }
-            } catch (e) {
-                console.warn(`Timeout or error waiting for post-submit state for ${person.fullName}:`, e);
-                await page.screenshot({ path: `error-wait-${person.documentNumber}.png` });
+            }
+
+            // 2. If we filled all questions, we are done
+            if (!completed.includes(false)) {
+                break;
+            }
+
+            // 3. Look for landing page / "Start now" button if we haven't started filling anything and it's visible
+            const startBtn = await page.evaluateHandle(() => {
+                const els = Array.from(document.querySelectorAll('button, div[role="button"], a'));
+                return els.find(el => {
+                    const text = el.textContent?.trim().toLowerCase() || '';
+                    return text.includes('start now') || text.includes('iniciar ahora') || text.includes('comenzar') || text.includes('comenzar ahora');
+                });
+            }) as ElementHandle<Element>;
+
+            if (startBtn && startBtn.asElement()) {
+                const isVisible = await page.evaluate((el) => {
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+                }, startBtn);
+
+                if (isVisible) {
+                    console.log('Landing page start button found. Clicking it...');
+                    await startBtn.click();
+                    await new Promise(r => setTimeout(r, 1500)); // wait for transition
+                    continue; // Re-evaluate questions on the new page
+                }
+            }
+
+            // 4. Try to navigate to the next page
+            const nextBtn = await page.evaluateHandle(() => {
+                const els = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                return els.find(el => {
+                    const text = el.textContent?.trim().toLowerCase() || '';
+                    const id = el.getAttribute('data-automation-id') || '';
+                    return id === 'nextButton' || text === 'next' || text === 'siguiente' || text === 'siguiente página';
+                });
+            }) as ElementHandle<Element>;
+
+            if (nextBtn && nextBtn.asElement()) {
+                const isVisibleAndEnabled = await page.evaluate((el) => {
+                    const rect = el.getBoundingClientRect();
+                    const isVisible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+                    const isEnabled = !el.hasAttribute('disabled') && !el.classList.contains('disabled');
+                    return isVisible && isEnabled;
+                }, nextBtn);
+
+                if (isVisibleAndEnabled) {
+                    console.log('Next button found. Clicking it to navigate to the next section...');
+                    await nextBtn.click();
+                    await new Promise(r => setTimeout(r, 1500)); // wait for transition
+                    continue;
+                }
+            }
+
+            // If we didn't fill anything on this page, and we couldn't click "Start" or "Next", we might be stuck
+            if (!filledAnyOnThisPage) {
+                console.warn('Stuck: No visible unanswered questions found and no active next/start buttons found.');
+                break;
+            }
+        }
+
+        // 5. Submit the Form
+        const submitBtn = await page.evaluateHandle(() => {
+            const els = Array.from(document.querySelectorAll('button, div[role="button"]'));
+            return els.find(el => {
+                const text = el.textContent?.trim().toLowerCase() || '';
+                const id = el.getAttribute('data-automation-id') || '';
+                return id === 'submitButton' || text === 'submit' || text === 'enviar';
+            });
+        }) as ElementHandle<Element>;
+
+        if (submitBtn && submitBtn.asElement()) {
+            const isVisibleAndEnabled = await page.evaluate((el) => {
+                const rect = el.getBoundingClientRect();
+                const isVisible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+                const isEnabled = !el.hasAttribute('disabled') && !el.classList.contains('disabled');
+                return isVisible && isEnabled;
+            }, submitBtn);
+
+            if (isVisibleAndEnabled) {
+                console.log(`Clicking Submit button...`);
+                const currentUrl = page.url();
+                await submitBtn.click();
+                
+                // Wait for success message, error, or URL change
+                try {
+                    await page.waitForFunction((initialUrl) => {
+                        return document.querySelector('div[data-automation-id="thankYouMessage"]') || 
+                               document.querySelector('.form-submit-error') || 
+                               window.location.href !== initialUrl;
+                    }, { timeout: 20000 }, currentUrl);
+
+                    const successMsg = await page.$('div[data-automation-id="thankYouMessage"]');
+                    const errorMsg = await page.$('.form-submit-error');
+
+                    if (page.url() !== currentUrl || successMsg) {
+                        console.log(`Successfully submitted for ${person.fullName}`);
+                    } else if (errorMsg) {
+                        console.error(`Submission error for ${person.fullName}`);
+                        await page.screenshot({ path: `error-submit-${person.documentNumber}.png` });
+                    } else {
+                        console.warn(`Timeout waiting for success/error after submit for ${person.fullName}`);
+                        await page.screenshot({ path: `error-timeout-${person.documentNumber}.png` });
+                    }
+                } catch (e) {
+                    console.warn(`Timeout or error waiting for post-submit state for ${person.fullName}:`, e);
+                    await page.screenshot({ path: `error-wait-${person.documentNumber}.png` });
+                }
+            } else {
+                console.error("Submit button found but it is not visible or not enabled.");
             }
         } else {
             console.error("Submit button not found!");
@@ -209,7 +280,6 @@ async function main() {
 
       } catch (err) {
         console.error(`Error processing ${person.fullName}:`, err);
-        // Take screenshot on error
         await page.screenshot({ path: `error-${person.documentNumber}.png` });
       } finally {
         await page.close();
