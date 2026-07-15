@@ -1,283 +1,87 @@
 import 'dotenv/config';
-import puppeteer, { ElementHandle } from 'puppeteer';
+import puppeteer, { ElementHandle, Page } from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { Person } from './types';
 
 const DATABASE_PATH = path.join(__dirname, '../database.json');
 
+type QuestionType = 'text' | 'radio' | 'dropdown' | 'scale';
+
+interface Question {
+  type: QuestionType;
+  text: string;
+  value: string | number | undefined;
+  optional?: boolean;
+}
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// Accent- and case-insensitive comparison. The form renders "Cédula de
+// ciudadanía" while the database may hold "Cedula de ciudadania".
+const NORMALIZE = `(s) => (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim()`;
+
+function buildQuestions(person: Person): Question[] {
+  return [
+    // Gating question: answering it reveals the rest of the survey.
+    { type: 'radio', text: 'persona Sorda', value: person.isDeaf },
+    { type: 'text', text: 'Nombre y apellidos', value: person.fullName },
+    { type: 'dropdown', text: 'Tipo de documento', value: person.documentType },
+    { type: 'text', text: 'Numero de documento', value: person.documentNumber },
+    { type: 'text', text: 'Correo electronico', value: person.email },
+    { type: 'text', text: 'Cargo', value: person.jobTitle },
+    { type: 'text', text: 'Nit de la Empresa', value: person.companyNit },
+    { type: 'text', text: 'Nombre de la Empresa', value: person.companyName },
+    { type: 'text', text: '¿En qué departamento te encuentras actualmente?', value: person.department },
+    { type: 'text', text: 'Numero de celular', value: person.phoneNumber },
+    { type: 'scale', text: 'capacidad del facilitador', value: person.ratings.facilitator },
+    { type: 'scale', text: 'formación te brindó las capacidades', value: person.ratings.trainingUtility },
+    { type: 'scale', text: 'herramientas de aprendizaje', value: person.ratings.tools },
+    { type: 'scale', text: 'satisfecho te has sentido con ARL SURA', value: person.ratings.arlSatisfaction },
+    { type: 'scale', text: 'satisfecho te sentiste con la formación', value: person.ratings.trainingSatisfaction },
+    { type: 'scale', text: 'fácil o difícil fue recibir la formación', value: person.ratings.difficulty },
+    { type: 'scale', text: 'probable es que recomiendes ARL SURA', value: person.ratings.recommendation },
+    { type: 'text', text: 'comentario o sugerencia', value: person.comment, optional: true },
+    { type: 'radio', text: 'autorizas a SURA', value: 'Acepto' }
+  ];
+}
+
 async function main() {
   console.log('Starting Form Bot...');
 
-  // 1. Load Data
   if (!fs.existsSync(DATABASE_PATH)) {
     console.error(`Database file not found at ${DATABASE_PATH}`);
     process.exit(1);
   }
-  const rawData = fs.readFileSync(DATABASE_PATH, 'utf-8');
-  const people: Person[] = JSON.parse(rawData);
+  const people: Person[] = JSON.parse(fs.readFileSync(DATABASE_PATH, 'utf-8'));
   console.log(`Loaded ${people.length} people from database.`);
 
-  // 2. Initialize Browser
+  const formUrl = process.env.FORM_URL;
+  if (!formUrl) {
+    console.error('FORM_URL is not defined in .env file');
+    process.exit(1);
+  }
+
   const headless = process.env.HEADLESS === 'true';
+  const dryRun = process.env.DRY_RUN === 'true';
+  if (dryRun) {
+    console.log('DRY_RUN is on: forms will be filled but NOT submitted.');
+  }
+
   const browser = await puppeteer.launch({
-    headless: headless,
+    headless,
     defaultViewport: null,
-    args: ['--start-maximized'] // Optional: Start maximized
+    args: ['--start-maximized']
   });
 
   try {
     for (const person of people) {
       console.log(`Processing: ${person.fullName}`);
       const page = await browser.newPage();
-      
       try {
-        // 3. Open Form
-        const formUrl = process.env.FORM_URL;
-        if (!formUrl) {
-            throw new Error('FORM_URL is not defined in .env file');
-        }
         await page.goto(formUrl, { waitUntil: 'networkidle0' });
-        
-        // Helper to find a question container by its text content
-        const findQuestionByText = async (text: string) => {
-            const questionHandle = await page.evaluateHandle((searchText) => {
-                const allQuestions = Array.from(document.querySelectorAll('div[data-automation-id="questionItem"]'));
-                return allQuestions.find(q => q.textContent?.toLowerCase().includes(searchText.toLowerCase()));
-            }, text) as unknown as ElementHandle<Element>;
-            
-            if (!questionHandle.asElement()) {
-                return null;
-            }
-            return questionHandle;
-        };
-
-        // Helper to type in a text input associated with a question
-        const answerTextInput = async (questionItem: ElementHandle<Element>, questionText: string, value: string) => {
-             let input = await questionItem.$('input[data-automation-id="textInput"]') as ElementHandle<Element> | null;
-             
-             if (!input) {
-                 input = await questionItem.$('input[placeholder="Enter your answer"], input[placeholder="Escriba su respuesta"], input[type="text"], textarea') as ElementHandle<Element> | null;
-             }
-             
-             if (input) {
-                 await input.click({ clickCount: 3 });
-                 await page.keyboard.press('Backspace');
-                 await input.type(value);
-             } else {
-                 console.error(`No input found for question "${questionText}"`);
-             }
-        };
-        
-        const answerRadioInput = async (questionItem: ElementHandle<Element>, questionText: string, value: string) => {
-            const optionElement = await questionItem.evaluateHandle((el, text) => {
-                const allElements = Array.from(el.querySelectorAll('span, label, div'));
-                return allElements.find(e => e.textContent?.trim() === text);
-            }, value) as unknown as ElementHandle<Element>;
-
-            if (optionElement && optionElement.asElement()) {
-                await optionElement.click();
-            } else {
-                 console.error(`Option '${value}' not found in question "${questionText}"`);
-            }
-        };
-        
-        const answerRatingInput = async (questionItem: ElementHandle<Element>, questionText: string, rating: number) => {
-            const ratingOption = await questionItem.evaluateHandle((el, ratingVal) => {
-                const elements = Array.from(el.querySelectorAll('span, div, label'));
-                return elements.find(e => {
-                    const aria = e.getAttribute('aria-label');
-                    const text = e.textContent?.trim();
-                    return (aria && aria.startsWith(ratingVal.toString())) || text === ratingVal.toString();
-                });
-            }, rating) as unknown as ElementHandle<Element>;
-
-            if (ratingOption && ratingOption.asElement()) {
-                await ratingOption.click();
-            } else {
-                 const options = await questionItem.$$('.rating-option, [role="radio"]');
-                 if (options.length >= rating) {
-                     await options[rating - 1].click();
-                 } else {
-                     console.error(`Rating ${rating} not found in question "${questionText}"`);
-                 }
-            }
-        };
-
-        const questionsToFill = [
-          { type: 'text', text: 'Nombre y apellidos', value: person.fullName },
-          { type: 'radio', text: 'Tipo de documento', value: person.documentType },
-          { type: 'text', text: 'Numero de documento', value: person.documentNumber },
-          { type: 'text', text: 'Correo electronico', value: person.email },
-          { type: 'text', text: 'Cargo', value: person.jobTitle },
-          { type: 'text', text: 'Nit de la Empresa', value: person.companyNit },
-          { type: 'text', text: 'Nombre de la Empresa', value: person.companyName },
-          { type: 'text', text: '¿En qué departamento te encuentras actualmente?', value: person.department },
-          { type: 'text', text: 'Numero de celular', value: person.phoneNumber },
-          { type: 'radio', text: '¿Es usted una persona Sorda?', value: person.isDeaf },
-          { type: 'rating', text: 'capacidad del facilitador', value: person.ratings.facilitator },
-          { type: 'rating', text: 'formación te brindó las capacidades', value: person.ratings.trainingUtility },
-          { type: 'rating', text: 'herramientas de aprendizaje', value: person.ratings.tools },
-          { type: 'rating', text: 'satisfecho te has sentido con ARL SURA', value: person.ratings.arlSatisfaction },
-          { type: 'rating', text: 'satisfecho te sentiste con la formación', value: person.ratings.trainingSatisfaction },
-          { type: 'rating', text: 'fácil o difícil fue recibir la formación', value: person.ratings.difficulty },
-          { type: 'rating', text: 'probable es que recomiendes ARL SURA', value: person.ratings.recommendation },
-          { type: 'radio', text: 'autorizas a SURA', value: 'Acepto' }
-        ];
-
-        let completed = Array(questionsToFill.length).fill(false);
-        let attemptsRemaining = 15; // safety limit to prevent infinite loops
-
-        while (completed.includes(false) && attemptsRemaining > 0) {
-            attemptsRemaining--;
-            let filledAnyOnThisPage = false;
-
-            // 1. Try to fill any unanswered question that is currently visible
-            for (let i = 0; i < questionsToFill.length; i++) {
-                if (completed[i]) continue;
-
-                const q = questionsToFill[i];
-                const questionItem = await findQuestionByText(q.text);
-                if (questionItem) {
-                    const isVisible = await page.evaluate((el) => {
-                        const rect = el.getBoundingClientRect();
-                        return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
-                    }, questionItem);
-
-                    if (isVisible) {
-                        console.log(`Filling visible question: "${q.text}"`);
-                        try {
-                            if (q.type === 'text') {
-                                await answerTextInput(questionItem, q.text, q.value as string);
-                            } else if (q.type === 'radio') {
-                                await answerRadioInput(questionItem, q.text, q.value as string);
-                            } else if (q.type === 'rating') {
-                                await answerRatingInput(questionItem, q.text, q.value as number);
-                            }
-                            completed[i] = true;
-                            filledAnyOnThisPage = true;
-                        } catch (err) {
-                            console.error(`Error filling question "${q.text}":`, err);
-                        }
-                    }
-                }
-            }
-
-            // 2. If we filled all questions, we are done
-            if (!completed.includes(false)) {
-                break;
-            }
-
-            // 3. Look for landing page / "Start now" button if we haven't started filling anything and it's visible
-            const startBtn = await page.evaluateHandle(() => {
-                const els = Array.from(document.querySelectorAll('button, div[role="button"], a'));
-                return els.find(el => {
-                    const text = el.textContent?.trim().toLowerCase() || '';
-                    return text.includes('start now') || text.includes('iniciar ahora') || text.includes('comenzar') || text.includes('comenzar ahora');
-                });
-            }) as ElementHandle<Element>;
-
-            if (startBtn && startBtn.asElement()) {
-                const isVisible = await page.evaluate((el) => {
-                    const rect = el.getBoundingClientRect();
-                    return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
-                }, startBtn);
-
-                if (isVisible) {
-                    console.log('Landing page start button found. Clicking it...');
-                    await startBtn.click();
-                    await new Promise(r => setTimeout(r, 1500)); // wait for transition
-                    continue; // Re-evaluate questions on the new page
-                }
-            }
-
-            // 4. Try to navigate to the next page
-            const nextBtn = await page.evaluateHandle(() => {
-                const els = Array.from(document.querySelectorAll('button, div[role="button"]'));
-                return els.find(el => {
-                    const text = el.textContent?.trim().toLowerCase() || '';
-                    const id = el.getAttribute('data-automation-id') || '';
-                    return id === 'nextButton' || text === 'next' || text === 'siguiente' || text === 'siguiente página';
-                });
-            }) as ElementHandle<Element>;
-
-            if (nextBtn && nextBtn.asElement()) {
-                const isVisibleAndEnabled = await page.evaluate((el) => {
-                    const rect = el.getBoundingClientRect();
-                    const isVisible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
-                    const isEnabled = !el.hasAttribute('disabled') && !el.classList.contains('disabled');
-                    return isVisible && isEnabled;
-                }, nextBtn);
-
-                if (isVisibleAndEnabled) {
-                    console.log('Next button found. Clicking it to navigate to the next section...');
-                    await nextBtn.click();
-                    await new Promise(r => setTimeout(r, 1500)); // wait for transition
-                    continue;
-                }
-            }
-
-            // If we didn't fill anything on this page, and we couldn't click "Start" or "Next", we might be stuck
-            if (!filledAnyOnThisPage) {
-                console.warn('Stuck: No visible unanswered questions found and no active next/start buttons found.');
-                break;
-            }
-        }
-
-        // 5. Submit the Form
-        const submitBtn = await page.evaluateHandle(() => {
-            const els = Array.from(document.querySelectorAll('button, div[role="button"]'));
-            return els.find(el => {
-                const text = el.textContent?.trim().toLowerCase() || '';
-                const id = el.getAttribute('data-automation-id') || '';
-                return id === 'submitButton' || text === 'submit' || text === 'enviar';
-            });
-        }) as ElementHandle<Element>;
-
-        if (submitBtn && submitBtn.asElement()) {
-            const isVisibleAndEnabled = await page.evaluate((el) => {
-                const rect = el.getBoundingClientRect();
-                const isVisible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
-                const isEnabled = !el.hasAttribute('disabled') && !el.classList.contains('disabled');
-                return isVisible && isEnabled;
-            }, submitBtn);
-
-            if (isVisibleAndEnabled) {
-                console.log(`Clicking Submit button...`);
-                const currentUrl = page.url();
-                await submitBtn.click();
-                
-                // Wait for success message, error, or URL change
-                try {
-                    await page.waitForFunction((initialUrl) => {
-                        return document.querySelector('div[data-automation-id="thankYouMessage"]') || 
-                               document.querySelector('.form-submit-error') || 
-                               window.location.href !== initialUrl;
-                    }, { timeout: 20000 }, currentUrl);
-
-                    const successMsg = await page.$('div[data-automation-id="thankYouMessage"]');
-                    const errorMsg = await page.$('.form-submit-error');
-
-                    if (page.url() !== currentUrl || successMsg) {
-                        console.log(`Successfully submitted for ${person.fullName}`);
-                    } else if (errorMsg) {
-                        console.error(`Submission error for ${person.fullName}`);
-                        await page.screenshot({ path: `error-submit-${person.documentNumber}.png` });
-                    } else {
-                        console.warn(`Timeout waiting for success/error after submit for ${person.fullName}`);
-                        await page.screenshot({ path: `error-timeout-${person.documentNumber}.png` });
-                    }
-                } catch (e) {
-                    console.warn(`Timeout or error waiting for post-submit state for ${person.fullName}:`, e);
-                    await page.screenshot({ path: `error-wait-${person.documentNumber}.png` });
-                }
-            } else {
-                console.error("Submit button found but it is not visible or not enabled.");
-            }
-        } else {
-            console.error("Submit button not found!");
-        }
-
+        await fillForm(page, person);
+        await submitForm(page, person, dryRun);
       } catch (err) {
         console.error(`Error processing ${person.fullName}:`, err);
         await page.screenshot({ path: `error-${person.documentNumber}.png` });
@@ -286,10 +90,246 @@ async function main() {
       }
     }
   } catch (error) {
-      console.error("Fatal error:", error);
+    console.error('Fatal error:', error);
   } finally {
     await browser.close();
     console.log('Bot finished.');
+  }
+}
+
+async function fillForm(page: Page, person: Person) {
+  const findQuestionByText = async (text: string) => {
+    const handle = await page.evaluateHandle((searchText) => {
+      const all = Array.from(document.querySelectorAll('div[data-automation-id="questionItem"]'));
+      return all.find(q => q.textContent?.toLowerCase().includes(searchText.toLowerCase()));
+    }, text) as unknown as ElementHandle<Element>;
+    return handle.asElement() ? handle : null;
+  };
+
+  const isVisible = (el: ElementHandle<Element>) => page.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && window.getComputedStyle(node).display !== 'none';
+  }, el);
+
+  const answerTextInput = async (item: ElementHandle<Element>, value: string) => {
+    let input: ElementHandle<Element> | null = await item.$('input[data-automation-id="textInput"]');
+    if (!input) {
+      input = await item.$('input[placeholder="Enter your answer"], input[placeholder="Escriba su respuesta"], input[type="text"], textarea');
+    }
+    if (!input) {
+      throw new Error('No text input found');
+    }
+    await input.click({ clickCount: 3 });
+    await page.keyboard.press('Backspace');
+    await input.type(value);
+  };
+
+  // Choice question rendered as radio buttons (e.g. Yes/No, consent).
+  const answerRadioInput = async (item: ElementHandle<Element>, value: string) => {
+    const option = await item.evaluateHandle((el, val, normSrc) => {
+      const norm = eval(normSrc) as (s: string) => string;
+      const radios = Array.from(el.querySelectorAll('[role="radio"]'));
+      let found = radios.find(r => norm(r.getAttribute('aria-label') || '') === norm(val)) ||
+        radios.find(r => norm(r.closest('label')?.textContent || '') === norm(val));
+      if (!found) {
+        const els = Array.from(el.querySelectorAll('label, span, div'));
+        const match = els.find(e => norm(e.textContent || '') === norm(val));
+        if (match) found = (match.closest('[role="radio"]') as Element) || match;
+      }
+      return found || null;
+    }, value, NORMALIZE) as unknown as ElementHandle<Element>;
+
+    if (!option.asElement()) {
+      throw new Error(`Radio option '${value}' not found`);
+    }
+    await option.click();
+  };
+
+  // Choice question rendered as a dropdown ("Selecciona la respuesta").
+  // Options are portaled to <body>, so they are queried at document level.
+  const answerDropdownInput = async (item: ElementHandle<Element>, value: string) => {
+    const trigger = await item.$('[role="button"], [aria-haspopup="listbox"], [aria-haspopup="true"], button');
+    if (!trigger) {
+      throw new Error('No dropdown trigger found');
+    }
+    await trigger.click();
+    await sleep(500);
+
+    const option = await page.evaluateHandle((val, normSrc) => {
+      const norm = eval(normSrc) as (s: string) => string;
+      const opts = Array.from(document.querySelectorAll('[role="option"]'));
+      return opts.find(o => norm(o.textContent || '') === norm(val)) ||
+        opts.find(o => norm(o.textContent || '').includes(norm(val))) || null;
+    }, value, NORMALIZE) as unknown as ElementHandle<Element>;
+
+    if (!option.asElement()) {
+      await page.keyboard.press('Escape');
+      throw new Error(`Dropdown option '${value}' not found`);
+    }
+    await option.click();
+  };
+
+  // Numeric scales: 1-5 Likert, 1-5 stars, and 0-10 NPS. Each option carries
+  // an aria-label whose first token is the number ("4 Star", "3", "10").
+  const answerScaleInput = async (item: ElementHandle<Element>, value: number) => {
+    const option = await item.evaluateHandle((el, target) => {
+      const radios = Array.from(el.querySelectorAll('[role="radio"]'));
+      return radios.find(r => {
+        const aria = (r.getAttribute('aria-label') || '').trim();
+        return aria.split(/\s+/)[0] === String(target);
+      }) || null;
+    }, value) as unknown as ElementHandle<Element>;
+
+    if (option.asElement()) {
+      await option.click();
+      return;
+    }
+    // Fallback: index into the radio list for a plain 1..N scale.
+    const radios = await item.$$('[role="radio"]');
+    if (value >= 1 && value <= radios.length) {
+      await radios[value - 1].click();
+    } else {
+      throw new Error(`Scale value '${value}' not found`);
+    }
+  };
+
+  const questions = buildQuestions(person);
+  const completed = questions.map(q => q.optional === true && (q.value === undefined || q.value === ''));
+  let attemptsRemaining = 15;
+
+  while (completed.includes(false) && attemptsRemaining > 0) {
+    attemptsRemaining--;
+    let filledAny = false;
+
+    for (let i = 0; i < questions.length; i++) {
+      if (completed[i]) continue;
+      const q = questions[i];
+      const item = await findQuestionByText(q.text);
+      if (!item || !(await isVisible(item))) continue;
+
+      try {
+        if (q.type === 'text') await answerTextInput(item, String(q.value));
+        else if (q.type === 'radio') await answerRadioInput(item, String(q.value));
+        else if (q.type === 'dropdown') await answerDropdownInput(item, String(q.value));
+        else if (q.type === 'scale') await answerScaleInput(item, Number(q.value));
+        completed[i] = true;
+        filledAny = true;
+      } catch (err) {
+        console.error(`Error filling "${q.text}":`, (err as Error).message);
+      }
+    }
+
+    if (!completed.includes(false)) break;
+
+    // Answering the gating question reveals more fields; let them render.
+    if (filledAny) {
+      await sleep(1200);
+      continue;
+    }
+
+    if (await clickIfVisible(page, ['start now', 'iniciar ahora', 'comenzar', 'empezar ahora', 'empezar'])) {
+      await sleep(1500);
+      continue;
+    }
+    if (await clickNext(page)) {
+      await sleep(1500);
+      continue;
+    }
+
+    console.warn('Stuck: no visible unanswered questions and no start/next button.');
+    break;
+  }
+
+  const missing = questions.filter((_, i) => !completed[i]).map(q => q.text);
+  if (missing.length > 0) {
+    console.warn(`Unfilled questions for ${person.fullName}: ${missing.join(', ')}`);
+  }
+}
+
+async function clickIfVisible(page: Page, texts: string[]): Promise<boolean> {
+  const btn = await page.evaluateHandle((labels) => {
+    const els = Array.from(document.querySelectorAll('button, div[role="button"], a'));
+    return els.find(el => {
+      const text = el.textContent?.trim().toLowerCase() || '';
+      const rect = el.getBoundingClientRect();
+      const visible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+      return visible && labels.some(l => text.includes(l));
+    }) || null;
+  }, texts) as unknown as ElementHandle<Element>;
+
+  if (!btn.asElement()) return false;
+  await btn.click();
+  return true;
+}
+
+async function clickNext(page: Page): Promise<boolean> {
+  const btn = await page.evaluateHandle(() => {
+    const els = Array.from(document.querySelectorAll('button, div[role="button"]'));
+    return els.find(el => {
+      const text = el.textContent?.trim().toLowerCase() || '';
+      const id = el.getAttribute('data-automation-id') || '';
+      const rect = el.getBoundingClientRect();
+      const enabled = !el.hasAttribute('disabled') && !el.classList.contains('disabled');
+      const visible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+      return visible && enabled && (id === 'nextButton' || text === 'next' || text === 'siguiente' || text === 'siguiente página');
+    }) || null;
+  }) as unknown as ElementHandle<Element>;
+
+  if (!btn.asElement()) return false;
+  await btn.click();
+  return true;
+}
+
+async function submitForm(page: Page, person: Person, dryRun: boolean) {
+  if (dryRun) {
+    await page.screenshot({ path: `dryrun-${person.documentNumber}.png`, fullPage: true });
+    console.log(`DRY_RUN: filled form for ${person.fullName} (screenshot saved, not submitted).`);
+    return;
+  }
+
+  const submitBtn = await page.evaluateHandle(() => {
+    const els = Array.from(document.querySelectorAll('button, div[role="button"]'));
+    return els.find(el => {
+      const text = el.textContent?.trim().toLowerCase() || '';
+      const id = el.getAttribute('data-automation-id') || '';
+      const rect = el.getBoundingClientRect();
+      const enabled = !el.hasAttribute('disabled') && !el.classList.contains('disabled');
+      const visible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+      return visible && enabled && (id === 'submitButton' || text === 'submit' || text === 'enviar');
+    }) || null;
+  }) as unknown as ElementHandle<Element>;
+
+  if (!submitBtn.asElement()) {
+    console.error('Submit button not found or not enabled.');
+    await page.screenshot({ path: `error-nosubmit-${person.documentNumber}.png` });
+    return;
+  }
+
+  const currentUrl = page.url();
+  await submitBtn.click();
+
+  try {
+    await page.waitForFunction((initialUrl) => {
+      return document.querySelector('div[data-automation-id="thankYouMessage"]') ||
+        document.querySelector('.form-submit-error') ||
+        window.location.href !== initialUrl;
+    }, { timeout: 20000 }, currentUrl);
+
+    const success = await page.$('div[data-automation-id="thankYouMessage"]');
+    const error = await page.$('.form-submit-error');
+
+    if (page.url() !== currentUrl || success) {
+      console.log(`Successfully submitted for ${person.fullName}`);
+    } else if (error) {
+      console.error(`Submission error for ${person.fullName}`);
+      await page.screenshot({ path: `error-submit-${person.documentNumber}.png` });
+    } else {
+      console.warn(`Timeout waiting for confirmation for ${person.fullName}`);
+      await page.screenshot({ path: `error-timeout-${person.documentNumber}.png` });
+    }
+  } catch (e) {
+    console.warn(`Timeout waiting for post-submit state for ${person.fullName}:`, (e as Error).message);
+    await page.screenshot({ path: `error-wait-${person.documentNumber}.png` });
   }
 }
 

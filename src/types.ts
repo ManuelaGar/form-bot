@@ -9,6 +9,7 @@ export interface Ratings {
 }
 
 export interface Person {
+  isDeaf: string;
   fullName: string;
   documentType: string;
   documentNumber: string;
@@ -18,6 +19,6 @@ export interface Person {
   companyName: string;
   department: string;
   phoneNumber: string;
-  isDeaf: string;
   ratings: Ratings;
+  comment?: string;
 }

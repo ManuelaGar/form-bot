@@ -1,83 +1,85 @@
 # Form Filling Bot
 
-A TypeScript-based automation bot that fills out Microsoft Forms for multiple users using Puppeteer.
+A TypeScript automation bot that fills a Microsoft Form for many users with Puppeteer.
 
-## Features
+Target form: *"Aprendamos sobre la diversidad y la inclusión: Perspectiva de género"* (ARL SURA training feedback). The bot handles its full structure:
 
-*   **Automated Form Filling**: Automatically fills text inputs, radio buttons, and rating scales.
-*   **Database Driven**: Reads user data from a local `database.json` file.
-*   **Robust Selectors**: Uses `data-automation-id` and label matching to reliably find fields, supporting both English and Spanish form locales.
-*   **Configurable**: Uses environment variables for form URL and browser settings.
-*   **Error Handling**: Captures screenshots on errors for easy debugging.
+*   A **gating** first question (`¿Es usted una persona Sorda?`). Answering it reveals the rest of the survey; the fill loop waits for the reveal.
+*   Text inputs, a **dropdown** (`Tipo de documento`), Yes/No and consent radios.
+*   Numeric scales in three shapes: 1–5 Likert, 1–5 stars, and a 0–10 NPS. All map by the number in each option's `aria-label`.
+*   Accent- and case-insensitive matching, so `"Cedula de ciudadania"` in data still selects `"Cédula de ciudadanía"` on the form.
+
+Field-to-question mapping lives in `buildQuestions()` in `src/index.ts`. Questions are matched by a substring of their visible text, so update those strings if the form wording changes.
 
 ## Prerequisites
 
-*   Node.js (v14 or higher)
+*   Node.js 22
 *   pnpm
 
 ## Installation
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/ManuelaGar/form-bot.git
-    cd form-bot
-    ```
-
-2.  Install dependencies:
-    ```bash
-    pnpm install
-    ```
+```bash
+pnpm install
+```
 
 ## Configuration
 
-1.  **Environment Variables**:
-    Create a `.env` file in the root directory (copy from `.env.example` if available, or use the template below):
-    ```env
-    FORM_URL=https://forms.office.com/r/1js0zLgnP5
-    HEADLESS=false
-    ```
-    *   `FORM_URL`: The URL of the Microsoft Form to fill.
-    *   `HEADLESS`: Set to `true` to run the browser in the background, or `false` to see the automation in action.
+**Environment variables** — create `.env` (see `.env.example`):
 
-2.  **User Database**:
-    Edit `database.json` to add the users you want to process. The file should contain an array of person objects:
-    ```json
-    [
-      {
-        "fullName": "John Doe",
-        "documentType": "Cedula de ciudadanía",
-        "documentNumber": "123456789",
-        "email": "john@example.com",
-        "jobTitle": "Developer",
-        "companyNit": "900123456",
-        "companyName": "Tech Corp",
-        "department": "Antioquia",
-        "phoneNumber": "3001234567",
-        "isDeaf": "No",
-        "ratings": {
-          "facilitator": 5,
-          "trainingUtility": 5,
-          "tools": 5,
-          "arlSatisfaction": 5,
-          "trainingSatisfaction": 5,
-          "difficulty": 5,
-          "recommendation": 10
-        }
-      }
-    ]
-    ```
+```env
+FORM_URL='https://forms.office.com/pages/responsepage.aspx?id=...'
+HEADLESS=false
+DRY_RUN=false
+```
+
+*   `FORM_URL`: the Microsoft Form to fill.
+*   `HEADLESS`: `true` runs the browser in the background, `false` shows it.
+*   `DRY_RUN`: `true` fills every form and saves a `dryrun-<documentNumber>.png` screenshot **without submitting**. Use it to check the fill before sending real responses. Defaults to `false` (submits).
+
+**User database** — `database.json` is an array of people. `comment` is optional; every other field is required by the form:
+
+```json
+[
+  {
+    "isDeaf": "No",
+    "fullName": "John Doe",
+    "documentType": "Cédula de ciudadanía",
+    "documentNumber": "123456789",
+    "email": "john@example.com",
+    "jobTitle": "Developer",
+    "companyNit": "900123456",
+    "companyName": "Tech Corp",
+    "department": "Antioquia",
+    "phoneNumber": "3001234567",
+    "ratings": {
+      "facilitator": 5,
+      "trainingUtility": 5,
+      "tools": 5,
+      "arlSatisfaction": 5,
+      "trainingSatisfaction": 5,
+      "difficulty": 5,
+      "recommendation": 10
+    },
+    "comment": "Optional free text"
+  }
+]
+```
+
+Rating ranges: `facilitator`, `trainingUtility`, `tools`, `arlSatisfaction`, `trainingSatisfaction`, `difficulty` are 1–5; `recommendation` (NPS) is 0–10. `documentType` must be one of the form's options, e.g. `Cédula de ciudadanía`, `Tarjeta de identidad`, `Cédula de Extranjería`, `Registro Civil`, `Pasaporte`. `isDeaf` is `"Si"` or `"No"` (`"Si"` submits without the rest of the survey).
 
 ## Usage
 
-To start the bot, run:
+Dry run first to confirm the fill, then submit for real:
 
 ```bash
-pnpm start
+DRY_RUN=true pnpm start   # fills + screenshots, no submit
+pnpm start                # submits one response per person
 ```
 
-The bot will launch a browser instance for each user in the database, fill out the form, submit it, and log the progress to the console.
+One browser tab is opened per person; progress and any unfilled questions are logged to the console.
 
 ## Troubleshooting
 
-*   **Timeouts**: If the bot times out waiting for the form to load or submit, check your internet connection. You can also adjust the timeout values in `src/index.ts`.
-*   **Selectors**: If the form structure changes, the bot might fail to find fields. Check the `error-*.png` screenshots generated in the root directory to identify the issue.
+*   **Timeouts**: check the network connection; adjust the timeouts in `src/index.ts` if needed.
+*   **Unfilled question warning**: the console logs any question left blank and the reason. If the form wording changed, update the match strings in `buildQuestions()`.
+*   **Selectors**: on error the bot saves `error-*.png` in the project root. Dry runs save `dryrun-*.png`.
