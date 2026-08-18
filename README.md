@@ -1,22 +1,32 @@
 # Form Filling Bot
 
-A TypeScript automation bot that fills a Microsoft Form for many users with Puppeteer.
+A TypeScript bot that fills Microsoft Forms for many people with Puppeteer. Built for ARL SURA training feedback forms, which change wording and structure every course.
 
-Target form: *"Aprendamos sobre la diversidad y la inclusión: Perspectiva de género"* (ARL SURA training feedback). The bot handles its full structure:
+## How it works
 
-*   A **gating** first question (`¿Es usted una persona Sorda?`). Answering it reveals the rest of the survey; the fill loop waits for the reveal.
-*   Text inputs, a **dropdown** (`Tipo de documento`), Yes/No and consent radios.
-*   Numeric scales in three shapes: 1–5 Likert, 1–5 stars, and a 0–10 NPS. All map by the number in each option's `aria-label`.
-*   Accent- and case-insensitive matching, so `"Cedula de ciudadania"` in data still selects `"Cédula de ciudadanía"` on the form.
+The bot does **not** hunt for a fixed list of questions. On each page it walks whatever questions the form renders, looks each one up in a catalog, and answers it. Two consequences:
 
-Field-to-question mapping lives in `buildQuestions()` in `src/index.ts`. Questions are matched by a substring of their visible text, so update those strings if the form wording changes.
+*   The same bot fills several different forms. Point `FORM_URL` at one and run.
+*   A form the bot has never seen still works, as long as its questions are already in the catalog. Anything unrecognised is logged by name so you know exactly what to add.
+
+Everything form-specific lives in `src/questions.ts`:
+
+| File | Job |
+| --- | --- |
+| `src/questions.ts` | The catalog: which question titles map to which field, and how to answer each. **This is the file you edit when a form changes.** |
+| `src/form.ts` | Puppeteer mechanics: reading the rendered questions, clicking options, paging. Form-agnostic. |
+| `src/index.ts` | Loads the database, drives the browser, submits, reports. |
+| `src/questions.test.ts` | Asserts every known question title resolves to the field it should. |
+
+Forms currently covered:
+
+*   **Salud mental y la multitarea: cómo nos afecta en el entorno laboral** — verified live on 2026-08-18. 13 questions; `Eres la persona que debemos contactar` = `No` opens a second page asking for the contact person.
+*   **Aprendamos sobre la diversidad y la inclusión: Perspectiva de género** — retired. Its titles come from `mock_form.html`, **not verified against the live form**. If it comes back, dump its real structure before trusting the mapping.
 
 ## Prerequisites
 
 *   Node.js 22
 *   pnpm
-
-## Installation
 
 ```bash
 pnpm install
@@ -27,37 +37,31 @@ pnpm install
 **Environment variables** — create `.env` (see `.env.example`):
 
 ```env
-FORM_URL='https://forms.office.com/pages/responsepage.aspx?id=...'
+FORM_URL='https://forms.cloud.microsoft/pages/responsepage.aspx?id=...'
 HEADLESS=false
-DRY_RUN=false
+DRY_RUN=true
+DELAY_MS=2000
 ```
 
-*   `FORM_URL`: the Microsoft Form to fill.
+*   `FORM_URL`: the form to fill. A URL passed as a CLI argument wins over this.
 *   `HEADLESS`: `true` runs the browser in the background, `false` shows it.
-*   `DRY_RUN`: `true` fills every form and saves a `dryrun-<documentNumber>.png` screenshot **without submitting**. Use it to check the fill before sending real responses. Defaults to `false` (submits).
+*   `DRY_RUN`: `true` fills every form and saves a `dryrun-<documentNumber>.png` screenshot **without submitting**. Anything other than `true` submits for real.
+*   `DELAY_MS`: pause between people, in milliseconds. Defaults to `2000`.
 
-**User database** — `database.json` is an array of people. `comment` is optional; every other field is required by the form:
+**User database** — `database.json` is an array of people. One database serves every form: each form takes the fields it asks for and ignores the rest.
 
 ```json
 [
   {
-    "isDeaf": "No",
     "fullName": "John Doe",
-    "documentType": "Cédula de ciudadanía",
     "documentNumber": "123456789",
     "email": "john@example.com",
-    "jobTitle": "Developer",
-    "companyNit": "900123456",
     "companyName": "Tech Corp",
-    "department": "Antioquia",
-    "phoneNumber": "3001234567",
     "ratings": {
-      "facilitator": 5,
-      "trainingUtility": 5,
-      "tools": 5,
-      "arlSatisfaction": 5,
-      "trainingSatisfaction": 5,
-      "difficulty": 5,
+      "infoQuality": 5,
+      "metExpectations": 5,
+      "facilitatorClarity": 5,
+      "practicalKnowledge": 5,
       "recommendation": 10
     },
     "comment": "Optional free text"
@@ -65,21 +69,71 @@ DRY_RUN=false
 ]
 ```
 
-Rating ranges: `facilitator`, `trainingUtility`, `tools`, `arlSatisfaction`, `trainingSatisfaction`, `difficulty` are 1–5; `recommendation` (NPS) is 0–10. `documentType` must be one of the form's options, e.g. `Cédula de ciudadanía`, `Tarjeta de identidad`, `Cédula de Extranjería`, `Registro Civil`, `Pasaporte`. `isDeaf` is `"Si"` or `"No"` (`"Si"` submits without the rest of the survey).
+| Rating | Asked as | Range |
+| --- | --- | --- |
+| `infoQuality` | Calidad de la información / de las herramientas de aprendizaje | 1–5 |
+| `metExpectations` | El contenido cumplió con tus expectativas / te brindó las capacidades | 1–5 |
+| `facilitatorClarity` | El facilitador fue claro y conciso / capacidad del facilitador | 1–5 |
+| `practicalKnowledge` | Conocimientos prácticos y útiles / satisfacción con la formación | 1–5 |
+| `recommendation` | NPS: qué tan probable es que recomiendes | 0–10 |
+| `arlSatisfaction` | Qué tan satisfecho te has sentido con ARL SURA | 1–5, only in the old form |
+| `difficulty` | Qué tan fácil o difícil fue recibir la formación | 1–5, only in the old form |
+
+Optional per person:
+
+*   `comment` — free text.
+*   `dataConsent` — `"Si"` (default) or `"No"`. `"Acepto"` is matched automatically where the form uses that label.
+*   `cybersecurityServices` — array of exact option labels. Defaults to `["La empresa no requiere ninguno de los servicios anteriores."]`.
+*   `isContactPerson` — `"Si"` (default) or `"No"`. `"No"` requires `contact`.
+*   `contact` — `{ fullName, role, email, phone }` for the second page.
+*   `documentType`, `jobTitle`, `companyNit`, `department`, `phoneNumber`, `isDeaf` — only asked by the old form.
+
+A field a form asks for but the person lacks is reported as `no value for <field>`; it is never invented.
 
 ## Usage
 
-Dry run first to confirm the fill, then submit for real:
-
 ```bash
-DRY_RUN=true pnpm start   # fills + screenshots, no submit
-pnpm start                # submits one response per person
+pnpm test                  # checks the catalog resolves every known title
+DRY_RUN=true pnpm start    # fills + screenshots, no submit
+DRY_RUN=false pnpm start   # submits one response per person
+pnpm start '<other-url>'   # same run against a different form
 ```
 
-One browser tab is opened per person; progress and any unfilled questions are logged to the console.
+One tab per person. The end of the run prints every problem found, grouped by person.
+
+## When SURA changes the form
+
+1.  Run it once with `DRY_RUN=true`. The log names every question it did not recognise:
+
+    ```
+    Unknown question: "¿Recomendarías esta capacitación?" — add it to CATALOG in src/questions.ts
+    ```
+
+2.  Add the title to the matching entry in `src/questions.ts`, or add a new entry. Use `titles` for a full title and `contains` only for wordings long enough to be unambiguous — `"Empresa"` as a substring also matches the cybersecurity question.
+3.  Add the title to `src/questions.test.ts` and run `pnpm test`.
+
+To dump a form's real structure, open it and run this in the browser console:
+
+```js
+Array.from(document.querySelectorAll('div[data-automation-id="questionItem"]')).map(q => {
+  const h = q.querySelector('[data-automation-id="questionTitle"] [role="heading"]')
+  const o = h.querySelector('[data-automation-id="questionOrdinal"]')
+  const title = h.textContent.replace(o ? o.textContent : '', '').trim()
+  const radios = [...q.querySelectorAll('[role="radio"]')].map(r => r.getAttribute('aria-label') || r.closest('label')?.textContent.trim())
+  const checks = [...q.querySelectorAll('[role="checkbox"]')].map(c => c.closest('label')?.textContent.trim())
+  const text = q.querySelector('[data-automation-id="textInput"]')
+  return `${title} :: ${text ? 'TEXT' : radios.length ? 'RADIO[' + radios.join(' | ') + ']' : 'CHECK[' + checks.join(' | ') + ']'}`
+}).join('\n')
+```
 
 ## Troubleshooting
 
-*   **Timeouts**: check the network connection; adjust the timeouts in `src/index.ts` if needed.
-*   **Unfilled question warning**: the console logs any question left blank and the reason. If the form wording changed, update the match strings in `buildQuestions()`.
-*   **Selectors**: on error the bot saves `error-*.png` in the project root. Dry runs save `dryrun-*.png`.
+*   **`Submit button not found`**: the bot never reached the last page. The log lists the buttons it did see — `Siguiente` means a required question is still blank.
+*   **`Form is blocking the next page: ...`**: Microsoft Forms itself names the questions it is waiting on.
+*   **`Unknown question`**: the form asks something the catalog does not cover. See above.
+*   **Screenshots**: errors save `error-*.png` in the project root, dry runs save `dryrun-*.png`.
+
+## Known gotchas
+
+*   The NPS question is not a scale like the others: its options are 1px-wide native `<input type="radio">` hidden under their `<label>`. They are clicked through the label, and their state is `.checked`, not `aria-checked`.
+*   `mock_form.html` is a mock of the **old** form. It is not kept in sync.
