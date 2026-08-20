@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Salud mental y la multitarea: cómo nos afecta en el entorno laboral</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="renderer.js"></script>
+  <script>
+    const AGREE = { low: 'Totalmente En Desacuerdo', high: 'Totalmente De acuerdo', min: 1, max: 5 };
+
+    mountForm({
+      title: 'Salud mental y la multitarea: cómo nos afecta en el entorno laboral',
+      pages: [
+        {
+          questions: [
+            { type: 'text', title: 'Nombre' },
+            { type: 'text', title: 'Numero de Cedula', placeholder: 'El valor debe ser un número.' },
+            { type: 'text', title: 'Correo electronico' },
+            { type: 'text', title: 'Empresa' },
+            { type: 'likert', title: '¿Cómo calificarías la calidad de la información proporcionada durante el curso?', low: 'Muy Mala', high: 'Excelente', min: 1, max: 5 },
+            { type: 'likert', title: '¿El contenido del curso cumplió con tus expectativas?', ...AGREE },
+            { type: 'likert', title: '¿El facilitador fue claro y conciso al presentar el contenido del curso?', ...AGREE },
+            { type: 'likert', title: '¿Consideras que el curso te proporcionó conocimientos prácticos y útiles para aplicar en tu entorno laboral?', ...AGREE },
+            { type: 'nps', title: 'En una escala del 0 al 10, ¿Qué tan probable o improbable es que recomiendes el plan de educación para los clientes ARL SURA a tus colegas, amigos o familiares?' },
+            { type: 'text', multiline: true, title: '¿Tienes algún comentario o sugerencia?' },
+            { type: 'choice', title: 'Al marcar esta casilla autorizas a SURA  para tratar tus datos personales.', options: ['Si', 'No'] },
+            {
+              type: 'multi',
+              required: true,
+              title: '¿En cuáles de los siguientes aspectos, tu empresa puede requerir servicios de SURA para la protección de la información y continuidad de la operación del negocio?',
+              options: [
+                'Seguro de protección digital empresas',
+                'Asesorías en gestión de ciberseguridad',
+                'Análisis de seguridad de aplicaciones web.',
+                'Entregar conocimiento de ciberseguridad para empleados.',
+                'Sensibilización para directivos y personal de TI.',
+                'Entrenamiento en ciberseguridad para equipos de TI y riesgos.',
+                'Simulacro de ataque de Phishing dirigido.',
+                'La empresa no requiere ninguno de los servicios anteriores.'
+              ]
+            },
+            { type: 'choice', required: true, title: 'Eres la persona que debemos contactar:', options: ['Si', 'No'] }
+          ]
+        },
+        {
+          // Only reachable when the respondent is not the contact person.
+          when: a => a['Eres la persona que debemos contactar:']?.includes('No') === true,
+          questions: [
+            { type: 'text', title: 'Nombre completo' },
+            { type: 'text', title: 'Rol:' },
+            { type: 'text', title: 'Correo Electrónico' },
+            { type: 'text', title: 'Numero de contacto' }
+          ]
+        }
+      ]
+    });
+  </script>
+</body>
+</html>

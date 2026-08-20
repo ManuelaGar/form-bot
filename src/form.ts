@@ -9,6 +9,11 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const isEmpty = (value: unknown): boolean =>
   value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
 
+// Answering a question makes the form re-render, which orphans the handles read
+// before it. Retrying is safe: every answer helper is idempotent.
+const isStaleHandle = (err: Error): boolean =>
+  /detached|not clickable|no longer|Node is either/i.test(err.message);
+
 export interface FillReport {
   answered: string[];
   missingValue: string[];
@@ -19,11 +24,6 @@ export interface FillReport {
 interface RenderedQuestion {
   handle: ElementHandle<Element>;
   title: string;
-}
-
-export async function currentPage(page: Page): Promise<1 | 2> {
-  const hasBack = await page.evaluate(() => document.querySelector('[data-automation-id="backButton"]') !== null);
-  return hasBack ? 2 : 1;
 }
 
 // The title of a question is its heading minus the "1." ordinal prefix.
@@ -200,19 +200,23 @@ async function readBlockingAlert(page: Page): Promise<string> {
 export async function fillForm(page: Page, person: Person): Promise<FillReport> {
   const report: FillReport = { answered: [], missingValue: [], unknown: [], failed: [] };
   const handled = new Set<string>();
+  const answeredEntries = new Set<string>();
+  // Incremented on every page transition, so the same title on a later page is
+  // treated as a new question rather than one already handled.
+  let step = 0;
   let attemptsRemaining = 25;
 
   while (attemptsRemaining > 0) {
     attemptsRemaining--;
-    const stage = await currentPage(page);
     const questions = await readQuestions(page);
     let answeredAny = false;
+    let staleHandles = false;
 
     for (const question of questions) {
-      const key = `${stage}::${question.title}`;
+      const key = `${step}::${question.title}`;
       if (handled.has(key)) continue;
 
-      const entry: CatalogEntry | null = resolveEntry(question.title, stage);
+      const entry: CatalogEntry | null = resolveEntry(question.title, answeredEntries);
       if (!entry) {
         handled.add(key);
         report.unknown.push(question.title);
@@ -233,13 +237,22 @@ export async function fillForm(page: Page, person: Person): Promise<FillReport> 
       try {
         await answer(page, question.handle, entry.type, value);
         handled.add(key);
+        answeredEntries.add(entry.id);
         report.answered.push(entry.id);
         answeredAny = true;
       } catch (err) {
+        if (isStaleHandle(err as Error)) {
+          staleHandles = true;
+          break;
+        }
+        handled.add(key);
         report.failed.push(`${entry.id}: ${(err as Error).message}`);
         console.error(`Error filling "${question.title}": ${(err as Error).message}`);
       }
     }
+
+    // Re-read the page immediately: nothing new rendered, the handles just aged.
+    if (staleHandles) continue;
 
     // A gating question can reveal more questions on the same page.
     if (answeredAny) {
@@ -248,6 +261,7 @@ export async function fillForm(page: Page, person: Person): Promise<FillReport> 
     }
 
     if (await clickStart(page)) {
+      step++;
       await sleep(1500);
       continue;
     }
@@ -256,6 +270,7 @@ export async function fillForm(page: Page, person: Person): Promise<FillReport> 
       await sleep(1500);
       const titlesBefore = questions.map(q => q.title).join('|');
       const titlesAfter = (await readQuestions(page)).map(q => q.title).join('|');
+      step++;
       if (titlesAfter === titlesBefore) {
         const alert = await readBlockingAlert(page);
         report.failed.push(alert !== '' ? `blocked: ${alert}` : 'blocked on the same page');

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Aprendamos sobre la diversidad y la inclusión: Perspectiva de género</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="renderer.js"></script>
+  <script>
+    const SCALE = { low: 'Muy bajo', high: 'Muy alto', min: 1, max: 5 };
+
+    mountForm({
+      title: 'Aprendamos sobre la diversidad y la inclusión: Perspectiva de género',
+      pages: [
+        { landing: 'En ARL SURA queremos ofrecerte la mejor experiencia de formación posible. Te invitamos a responder las siguientes preguntas:' },
+        {
+          questions: [
+            // Gating question: answering it reveals the rest of the section.
+            { type: 'choice', required: true, gate: true, gateStops: 'Si', title: '¿Es usted una persona Sorda?', options: ['Si', 'No'] },
+            { type: 'text', required: true, title: 'Nombre y apellidos' },
+            { type: 'dropdown', required: true, title: 'Tipo de documento', options: ['Cédula de ciudadanía', 'Tarjeta de identidad', 'Cédula de Extranjería', 'Registro Civil', 'Pasaporte'] },
+            { type: 'text', required: true, title: 'Numero de documento' },
+            { type: 'text', required: true, title: 'Correo electronico' },
+            { type: 'text', required: true, title: 'Cargo' },
+            { type: 'text', required: true, title: 'Nit de la Empresa' },
+            { type: 'text', required: true, title: 'Nombre de la Empresa' },
+            { type: 'text', required: true, title: '¿En qué departamento te encuentras actualmente?' },
+            { type: 'text', required: true, title: 'Numero de celular' }
+          ]
+        },
+        {
+          questions: [
+            { type: 'likert', required: true, title: 'Califique la capacidad del facilitador', ...SCALE },
+            { type: 'likert', required: true, title: '¿La formación te brindó las capacidades necesarias?', ...SCALE },
+            { type: 'likert', required: true, title: 'Calidad de las herramientas de aprendizaje', ...SCALE },
+            { type: 'likert', required: true, title: '¿Qué tan satisfecho te has sentido con ARL SURA?', ...SCALE },
+            { type: 'likert', required: true, title: '¿Qué tan satisfecho te sentiste con la formación?', ...SCALE },
+            { type: 'likert', required: true, title: '¿Qué tan fácil o difícil fue recibir la formación?', low: 'Muy difícil', high: 'Muy fácil', min: 1, max: 5 },
+            { type: 'nps', required: true, title: '¿Qué tan probable es que recomiendes ARL SURA?' },
+            { type: 'text', multiline: true, title: '¿Tienes algún comentario o sugerencia?' },
+            { type: 'choice', required: true, title: '¿autorizas a SURA el tratamiento de tus datos?', options: ['Acepto', 'No acepto'] }
+          ]
+        }
+      ]
+    });
+  </script>
+</body>
+</html>

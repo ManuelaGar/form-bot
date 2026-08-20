@@ -1,0 +1,33 @@
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #eef4f4; margin: 0; padding: 24px; }
+#root { max-width: 720px; margin: 0 auto; background: #fff; padding: 32px; border-radius: 8px; }
+h1 { font-size: 24px; }
+.question { margin: 28px 0; }
+[data-automation-id="questionTitle"] { display: block; font-weight: 600; margin-bottom: 10px; }
+.type-hint { position: absolute; left: -9999px; }
+input[data-automation-id="textInput"], textarea[data-automation-id="textInput"] {
+  width: 100%; padding: 10px; border: 1px solid #b9c6c6; border-radius: 4px; box-sizing: border-box;
+}
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.chip { min-width: 64px; height: 40px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid #b9c6c6; border-radius: 4px; cursor: pointer; }
+.chip[aria-checked="true"] { background: #1f6f6f; color: #fff; border-color: #1f6f6f; }
+[data-automation-id="npsCell"] { position: relative; display: inline-block; }
+.nps-input { position: absolute; width: 1px; height: 40px; opacity: 0; margin: 0; }
+.nps-label { display: flex; width: 60px; height: 40px; align-items: center; justify-content: center;
+  border: 1px solid #b9c6c6; border-radius: 4px; cursor: pointer; }
+.nps-input:checked + .nps-label { background: #1f6f6f; color: #fff; border-color: #1f6f6f; }
+.choice { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.choice [role="radio"], .choice [role="checkbox"] { width: 18px; height: 18px; border: 1px solid #6b7c7c; }
+.choice [role="radio"] { border-radius: 50%; }
+.choice [role="radio"][aria-checked="true"], .choice [role="checkbox"][aria-checked="true"] { background: #1f6f6f; }
+.combo { border: 1px solid #b9c6c6; border-radius: 4px; padding: 10px; cursor: pointer; }
+.listbox { position: absolute; top: 40%; left: 50%; background: #fff; border: 1px solid #b9c6c6;
+  border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.15); z-index: 10; }
+.option { padding: 10px 16px; cursor: pointer; }
+.option:hover { background: #eef4f4; }
+.req { color: #c33; margin-left: 4px; }
+.footer { display: flex; gap: 12px; margin-top: 32px; }
+button { background: #1f6f6f; color: #fff; border: none; padding: 10px 22px; border-radius: 4px;
+  font-weight: 600; cursor: pointer; }
+[role="alert"] { color: #c33; margin-top: 16px; }

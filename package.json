@@ -10,6 +10,9 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "test": "ts-node src/questions.test.ts",
+    "test:e2e": "ts-node src/e2e.test.ts",
+    "mock:nuevo": "ts-node src/index.ts \"file://$PWD/mocks/salud-mental.html\"",
+    "mock:viejo": "ts-node src/index.ts \"file://$PWD/mocks/perspectiva-genero.html\"",
     "build": "tsc"
   },
   "keywords": [],

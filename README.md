@@ -17,11 +17,13 @@ Everything form-specific lives in `src/questions.ts`:
 | `src/form.ts` | Puppeteer mechanics: reading the rendered questions, clicking options, paging. Form-agnostic. |
 | `src/index.ts` | Loads the database, drives the browser, submits, reports. |
 | `src/questions.test.ts` | Asserts every known question title resolves to the field it should. |
+| `src/e2e.test.ts` | Drives the bot against the local mocks and asserts what each form received. |
+| `mocks/` | Local doubles of both forms. Same DOM shape as the real thing, nothing leaves the machine. |
 
 Forms currently covered:
 
 *   **Salud mental y la multitarea: cómo nos afecta en el entorno laboral** — verified live on 2026-08-18. 13 questions; `Eres la persona que debemos contactar` = `No` opens a second page asking for the contact person.
-*   **Aprendamos sobre la diversidad y la inclusión: Perspectiva de género** — retired. Its titles come from `mock_form.html`, **not verified against the live form**. If it comes back, dump its real structure before trusting the mapping.
+*   **Aprendamos sobre la diversidad y la inclusión: Perspectiva de género** — retired. Its titles come from the old `mock_form.html`, **not verified against the live form**. If it comes back, dump its real structure before trusting the mapping.
 
 ## Prerequisites
 
@@ -94,10 +96,15 @@ A field a form asks for but the person lacks is reported as `no value for <field
 
 ```bash
 pnpm test                  # checks the catalog resolves every known title
-DRY_RUN=true pnpm start    # fills + screenshots, no submit
+pnpm test:e2e              # fills and submits both local mocks, asserts what they received
+pnpm mock:nuevo            # runs the bot against the local copy of the current form
+pnpm mock:viejo            # same against the local copy of the retired one
+DRY_RUN=true pnpm start    # fills + screenshots the real form, no submit
 DRY_RUN=false pnpm start   # submits one response per person
 pnpm start '<other-url>'   # same run against a different form
 ```
+
+Both `pnpm test` and `pnpm test:e2e` run offline. Use them before touching the real form: a bad run there burns real responses.
 
 One tab per person. The end of the run prints every problem found, grouped by person.
 
@@ -111,6 +118,7 @@ One tab per person. The end of the run prints every problem found, grouped by pe
 
 2.  Add the title to the matching entry in `src/questions.ts`, or add a new entry. Use `titles` for a full title and `contains` only for wordings long enough to be unambiguous — `"Empresa"` as a substring also matches the cybersecurity question.
 3.  Add the title to `src/questions.test.ts` and run `pnpm test`.
+4.  Add the question to the matching file in `mocks/` and run `pnpm test:e2e`, so the change is covered end to end before it touches SURA.
 
 To dump a form's real structure, open it and run this in the browser console:
 
@@ -136,4 +144,6 @@ Array.from(document.querySelectorAll('div[data-automation-id="questionItem"]')).
 ## Known gotchas
 
 *   The NPS question is not a scale like the others: its options are 1px-wide native `<input type="radio">` hidden under their `<label>`. They are clicked through the label, and their state is `.checked`, not `aria-checked`.
-*   `mock_form.html` is a mock of the **old** form. It is not kept in sync.
+*   A form re-renders when it is answered, which orphans element handles read before the click. The bot detects the stale handle, re-reads the page and retries; every answer helper is idempotent so retrying cannot double-fill.
+*   `mocks/renderer.js` rebuilds the whole DOM on every choice click — harsher than the real React form, on purpose.
+*   `mock_form.html` in the project root is superseded by `mocks/perspectiva-genero.html` and can be deleted.

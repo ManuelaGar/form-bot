@@ -11,9 +11,6 @@ export interface CatalogEntry {
   // "Empresa" as a substring would also match the cybersecurity question.
   contains?: string[];
   optional?: boolean;
-  // Restricts the entry to one page. Needed because "Correo electronico" is the
-  // respondent on page 1 and the contact person on page 2.
-  page?: 1 | 2;
   value: (person: Person) => string | number | string[] | undefined;
 }
 
@@ -60,7 +57,6 @@ export const CATALOG: CatalogEntry[] = [
     id: 'email',
     type: 'text',
     titles: ['Correo electronico'],
-    page: 1,
     value: p => p.email
   },
   {
@@ -195,37 +191,34 @@ export const CATALOG: CatalogEntry[] = [
     id: 'contactFullName',
     type: 'text',
     titles: ['Nombre completo'],
-    page: 2,
     value: p => p.contact?.fullName
   },
   {
     id: 'contactRole',
     type: 'text',
     titles: ['Rol:', 'Rol'],
-    page: 2,
     value: p => p.contact?.role
   },
   {
     id: 'contactEmail',
     type: 'text',
     titles: ['Correo Electrónico'],
-    page: 2,
     value: p => p.contact?.email
   },
   {
     id: 'contactPhone',
     type: 'text',
     titles: ['Numero de contacto'],
-    page: 2,
     value: p => p.contact?.phone
   }
 ];
 
-export function resolveEntry(title: string, page: 1 | 2): CatalogEntry | null {
+// Entries already used are excluded, which is what separates the two
+// "Correo electronico" questions: the first one is the respondent, a second one
+// later in the same run can only be the contact person.
+export function resolveEntry(title: string, alreadyAnswered: ReadonlySet<string>): CatalogEntry | null {
   const target = normalize(title);
-  const candidates = CATALOG
-    .filter(e => e.page === undefined || e.page === page)
-    .sort((a, b) => Number(b.page === page) - Number(a.page === page));
+  const candidates = CATALOG.filter(e => !alreadyAnswered.has(e.id));
 
   return candidates.find(e => e.titles.some(t => normalize(t) === target)) ??
     candidates.find(e => e.contains?.some(t => target.includes(normalize(t))) === true) ??
