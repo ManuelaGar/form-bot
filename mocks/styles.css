@@ -31,3 +31,7 @@ input[data-automation-id="textInput"], textarea[data-automation-id="textInput"] 
 button { background: #1f6f6f; color: #fff; border: none; padding: 10px 22px; border-radius: 4px;
   font-weight: 600; cursor: pointer; }
 [role="alert"] { color: #c33; margin-top: 16px; }
+.native-choice { position: relative; display: flex; align-items: center; height: 28px; }
+.native-choice label { padding-left: 26px; cursor: pointer; }
+.native-choice .nps-input { height: 20px; }
+.native-choice input:checked + label { font-weight: 600; }

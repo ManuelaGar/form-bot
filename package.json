@@ -13,6 +13,7 @@
     "test:e2e": "ts-node src/e2e.test.ts",
     "mock:nuevo": "ts-node src/index.ts \"file://$PWD/mocks/salud-mental.html\"",
     "mock:viejo": "ts-node src/index.ts \"file://$PWD/mocks/perspectiva-genero.html\"",
+    "mock:modulo4": "ts-node src/index.ts \"file://$PWD/mocks/modulo-4.html\"",
     "build": "tsc"
   },
   "keywords": [],

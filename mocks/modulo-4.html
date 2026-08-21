@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Modulo 4 El poder del ejemplo en la vida laboral y personal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="renderer.js"></script>
+  <script>
+    // Read live from the form on 2026-08-21. Its two quirks against the earlier
+    // forms: "Tipo de documento" is native radios with no dropdown trigger, and
+    // the 1-5 scales are stars, so their aria-labels read "3 CheckMark".
+    const STARS = { stars: true, min: 1, max: 5 };
+
+    mountForm({
+      title: 'Modulo 4 El poder del ejemplo en la vida laboral y personal',
+      pages: [
+        {
+          questions: [
+            { type: 'text', title: 'Nombre y apellidos' },
+            {
+              type: 'nativeChoice',
+              title: 'Tipo de documento',
+              options: [
+                'Cedula de ciudadanía', 'Tarjeta de identidad', 'Cédula de Extranjería', 'Registro Civil',
+                'Pasaporte', 'Carne Diplomatico', 'Permiso de Protección Temporal', 'Permiso Especial',
+                'Salvo Conducto de Permanencia', 'Permiso Especial de Trabajo'
+              ]
+            },
+            { type: 'text', title: 'Numero de documento' },
+            { type: 'text', title: 'Correo electronico' },
+            { type: 'text', title: 'Cargo' },
+            { type: 'text', title: 'Nit de la Empresa' },
+            { type: 'text', title: 'Nombre de la Empresa' },
+            { type: 'text', title: '¿En qué departamento te encuentras actualmente?' },
+            { type: 'text', title: 'Numero de celular' },
+            { type: 'nativeChoice', title: '¿Es usted una persona Sorda?', options: ['Si', 'No'] },
+            { type: 'likert', title: '¿Cómo calificarías la capacidad del facilitador/a para dominar el tema y resolver inquietudes?', ...STARS },
+            { type: 'likert', title: '¿Consideras que la formación te brindó las capacidades útiles para aplicarlos en tu día a día?', ...STARS },
+            { type: 'likert', title: '¿Las herramientas de aprendizaje fueron acordes para la apropiación del conocimiento?', ...STARS },
+            { type: 'likert', title: 'En general, ¿qué tan satisfecho te has sentido con ARL SURA?', ...STARS },
+            { type: 'likert', title: 'En general, ¿qué tan satisfecho te sentiste con la formación ofrecida por ARL SURA?', ...STARS },
+            { type: 'likert', title: '¿Qué tan fácil o difícil fue recibir la formación ofrecida por ARL SURA?', ...STARS },
+            { type: 'nps', title: '¿Qué tan probable es que recomiendes ARL SURA a tus colegas, amigos o familiares?' },
+            { type: 'text', multiline: true, title: '¿Tienes algún comentario o sugerencia?' },
+            {
+              type: 'nativeChoice',
+              title: 'Al marcar esta casilla autorizas a SURA  para tratar tus datos personales.Ingresa al siguiente link para ver las políticas de tratamiento de datos https://www.example.com/politica-tratamiento-de-datos',
+              options: ['Acepto', 'No acepto']
+            }
+          ]
+        }
+      ]
+    });
+  </script>
+</body>
+</html>

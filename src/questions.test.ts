@@ -56,9 +56,34 @@ const PERSPECTIVA_GENERO: Array<[string, string]> = [
   ['¿autorizas a SURA el tratamiento de tus datos?', 'dataConsent']
 ];
 
+// Titles read live from the form on 2026-08-21. Same shape as the retired form,
+// different wording: star scales, native radios, and a consent title with a URL
+// glued onto the end.
+const MODULO_4: Array<[string, string]> = [
+  ['Nombre y apellidos', 'fullName'],
+  ['Tipo de documento', 'documentType'],
+  ['Numero de documento', 'documentNumber'],
+  ['Correo electronico', 'email'],
+  ['Cargo', 'jobTitle'],
+  ['Nit de la Empresa', 'companyNit'],
+  ['Nombre de la Empresa', 'companyName'],
+  ['¿En qué departamento te encuentras actualmente?', 'department'],
+  ['Numero de celular', 'phoneNumber'],
+  ['¿Es usted una persona Sorda?', 'isDeaf'],
+  ['¿Cómo calificarías la capacidad del facilitador/a para dominar el tema y resolver inquietudes?', 'facilitatorClarity'],
+  ['¿Consideras que la formación te brindó las capacidades útiles para aplicarlos en tu día a día?', 'metExpectations'],
+  ['¿Las herramientas de aprendizaje fueron acordes para la apropiación del conocimiento?', 'infoQuality'],
+  ['En general, ¿qué tan satisfecho te has sentido con ARL SURA?', 'arlSatisfaction'],
+  ['En general, ¿qué tan satisfecho te sentiste con la formación ofrecida por ARL SURA?', 'practicalKnowledge'],
+  ['¿Qué tan fácil o difícil fue recibir la formación ofrecida por ARL SURA?', 'difficulty'],
+  ['¿Qué tan probable es que recomiendes ARL SURA a tus colegas, amigos o familiares?', 'recommendation'],
+  ['¿Tienes algún comentario o sugerencia?', 'comment'],
+  ['Al marcar esta casilla autorizas a SURA  para tratar tus datos personales.Ingresa al siguiente link para ver las políticas de tratamiento de datos https://www.example.com/politica', 'dataConsent']
+];
+
 let failures = 0;
 
-for (const [form, cases] of [['Salud mental', SALUD_MENTAL], ['Perspectiva de género', PERSPECTIVA_GENERO]] as const) {
+for (const [form, cases] of [['Salud mental', SALUD_MENTAL], ['Perspectiva de género', PERSPECTIVA_GENERO], ['Modulo 4', MODULO_4]] as const) {
   const resolved = walk(cases.map(([title]) => title));
   resolved.forEach(({ title, id }, i) => {
     const expected = cases[i][1];
@@ -73,7 +98,8 @@ for (const [form, cases] of [['Salud mental', SALUD_MENTAL], ['Perspectiva de g�
 // Every catalog entry must be reachable from at least one known form.
 const reached = new Set([
   ...walk(SALUD_MENTAL.map(([title]) => title)),
-  ...walk(PERSPECTIVA_GENERO.map(([title]) => title))
+  ...walk(PERSPECTIVA_GENERO.map(([title]) => title)),
+  ...walk(MODULO_4.map(([title]) => title))
 ].map(r => r.id));
 for (const entry of CATALOG) {
   if (!reached.has(entry.id)) {

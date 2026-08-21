@@ -42,7 +42,7 @@ function textQuestion(q) {
 function likertQuestion(q) {
   const row = el('div', { class: 'row' });
   for (let n = q.min; n <= q.max; n++) {
-    const suffix = n === q.min ? ` ${q.low}` : n === q.max ? ` ${q.high}` : '';
+    const suffix = q.stars ? ' CheckMark' : n === q.min ? ` ${q.low}` : n === q.max ? ` ${q.high}` : '';
     const checked = answers[q.title] === String(n);
     const option = el('div', { role: 'radio', 'aria-checked': String(checked), 'aria-label': `${n}${suffix}`, class: 'chip', text: String(n) });
     option.addEventListener('click', () => {
@@ -69,6 +69,21 @@ function npsQuestion(q) {
     row.appendChild(el('div', { 'data-automation-id': 'npsCell', role: 'presentation' }, [input, label]));
   }
   return [heading(q.title, 'Net Promoter Score.'), row];
+}
+
+// Some choice questions are native radios carrying the option text in
+// aria-label, hidden under their own label — same shape as the NPS.
+function nativeChoiceQuestion(q) {
+  const box = el('div', { class: 'col' });
+  const name = `choice-${ordinal}`;
+  q.options.forEach((text, i) => {
+    const id = `${name}-${i}`;
+    const input = el('input', { type: 'radio', role: 'radio', 'aria-label': text, id, name, value: text, class: 'nps-input' });
+    if (answers[q.title] === text) input.checked = true;
+    input.addEventListener('change', () => { answers[q.title] = text; refreshFooter(); });
+    box.appendChild(el('div', { class: 'native-choice' }, [input, el('label', { for: id, text })]));
+  });
+  return [heading(q.title, 'Opción única.'), box];
 }
 
 // Choice options carry no aria-label: the text lives in the wrapping label.
@@ -166,11 +181,13 @@ function render() {
     ordinal++;
     const item = el('div', { 'data-automation-id': 'questionItem', class: 'question' });
     const build = { text: textQuestion, likert: likertQuestion, nps: npsQuestion, dropdown: dropdownQuestion };
-    const parts = q.type === 'choice'
-      ? choiceQuestion(q, 'radio')
-      : q.type === 'multi'
-        ? choiceQuestion(q, 'checkbox')
-        : build[q.type](q);
+    const parts = q.type === 'nativeChoice'
+      ? nativeChoiceQuestion(q)
+      : q.type === 'choice'
+        ? choiceQuestion(q, 'radio')
+        : q.type === 'multi'
+          ? choiceQuestion(q, 'checkbox')
+          : build[q.type](q);
     parts.forEach(p => item.appendChild(p));
     if (q.required) item.appendChild(el('span', { class: 'req', text: '*' }));
     root.appendChild(item);

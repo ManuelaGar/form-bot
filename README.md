@@ -23,6 +23,7 @@ Everything form-specific lives in `src/questions.ts`:
 Forms currently covered:
 
 *   **Salud mental y la multitarea: cómo nos afecta en el entorno laboral** — verified live on 2026-08-18. 13 questions; `Eres la persona que debemos contactar` = `No` opens a second page asking for the contact person.
+*   **Modulo 4 El poder del ejemplo en la vida laboral y personal** — verified live on 2026-08-21. 19 questions on a single page. Same field set as the retired form with different wording; needed no catalog changes.
 *   **Aprendamos sobre la diversidad y la inclusión: Perspectiva de género** — retired. Its titles come from the old `mock_form.html`, **not verified against the live form**. If it comes back, dump its real structure before trusting the mapping.
 
 ## Prerequisites
@@ -99,6 +100,7 @@ pnpm test                  # checks the catalog resolves every known title
 pnpm test:e2e              # fills and submits both local mocks, asserts what they received
 pnpm mock:nuevo            # runs the bot against the local copy of the current form
 pnpm mock:viejo            # same against the local copy of the retired one
+pnpm mock:modulo4          # same against the local copy of Modulo 4
 DRY_RUN=true pnpm start    # fills + screenshots the real form, no submit
 DRY_RUN=false pnpm start   # submits one response per person
 pnpm start '<other-url>'   # same run against a different form
@@ -143,6 +145,9 @@ Array.from(document.querySelectorAll('div[data-automation-id="questionItem"]')).
 
 ## Known gotchas
 
+*   Scales come in two flavours: plain 1-5 with `aria-label="3"` and stars with `aria-label="3 CheckMark"`. Matching on the first token of the label covers both.
+*   The same question can be div-based options in one form and native `<input type="radio">` in another, and a choice question can be a dropdown in one form and radios in another. The answer helpers cover both; a `dropdown` entry falls back to radios when the question has no trigger.
+*   A question title can have a URL glued to its end (the consent question of Modulo 4). That is why long titles are matched with `contains`, not exactly.
 *   The NPS question is not a scale like the others: its options are 1px-wide native `<input type="radio">` hidden under their `<label>`. They are clicked through the label, and their state is `.checked`, not `aria-checked`.
 *   A form re-renders when it is answered, which orphans element handles read before the click. The bot detects the stale handle, re-reads the page and retries; every answer helper is idempotent so retrying cannot double-fill.
 *   `mocks/renderer.js` rebuilds the whole DOM on every choice click — harsher than the real React form, on purpose.
