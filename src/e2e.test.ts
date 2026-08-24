@@ -129,6 +129,32 @@ const CASES: Case[] = [
       '¿Tienes algún comentario o sugerencia?': 'Todo muy bien',
       ['Al marcar esta casilla autorizas a SURA  para tratar tus datos personales.Ingresa al siguiente link para ver las políticas de tratamiento de datos https://www.example.com/politica-tratamiento-de-datos']: 'Acepto'
     }
+  },
+  {
+    name: 'Prevención del suicidio — landing, gate, nested titles with no ordinal',
+    mock: 'prevencion-suicidio.html',
+    person: PERSON,
+    expect: {
+      '¿Es usted una persona Sorda?': 'No',
+      'Nombre y apellidos': 'Manuela García',
+      'Tipo de documento': 'Cédula de ciudadanía',
+      'Numero de documento': '1038415763',
+      'Correo electronico': 'manugarcia100@hotmail.com',
+      'Cargo': 'Subgerente',
+      'Nit de la Empresa': '900473191',
+      'Nombre de la Empresa': 'Inversiones Hoyos Y García',
+      '¿En qué departamento te encuentras actualmente?': 'Antioquia',
+      'Numero de celular': '3216439960',
+      '¿Cómo calificarías la capacidad del facilitador/a para dominar el tema y resolver inquietudes?': '4',
+      '¿Consideras que la formación te brindó las capacidades útiles para aplicarlos en tu día a día?': '3',
+      '¿Las herramientas de aprendizaje fueron acordes para la apropiación del conocimiento?': '5',
+      'En general, ¿qué tan satisfecho te has sentido con ARL SURA?': '4',
+      'En general, ¿qué tan satisfecho te sentiste con la formación ofrecida por ARL SURA?': '5',
+      '¿Qué tan fácil o difícil fue recibir la formación ofrecida por ARL SURA?': '5',
+      '¿Qué tan probable es que recomiendes ARL SURA a tus colegas, amigos o familiares?': '8',
+      '¿Tienes algún comentario o sugerencia?': 'Todo muy bien',
+      ['Al marcar esta casilla autorizas a SURA para tratar tus datos personales.Ingresa al siguiente link para ver las políticas de tratamiento de datos https://www.example.com/politica-tratamiento-de-datos']: 'Acepto'
+    }
   }
 ];
 

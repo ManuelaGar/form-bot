@@ -81,9 +81,17 @@ const MODULO_4: Array<[string, string]> = [
   ['Al marcar esta casilla autorizas a SURA  para tratar tus datos personales.Ingresa al siguiente link para ver las políticas de tratamiento de datos https://www.example.com/politica', 'dataConsent']
 ];
 
+// "Prevención del suicidio en el entorno laboral" (verified live 2026-08-24)
+// repeats Modulo 4's wording except for the consent question, which uses a
+// single space and a different link. Only the difference is listed; the rest of
+// that form is covered end to end in e2e.test.ts.
+const PREVENCION_SUICIDIO: Array<[string, string]> = [
+  ['Al marcar esta casilla autorizas a SURA para tratar tus datos personales.Ingresa al siguiente link para ver las políticas de tratamiento de datos https://www.example.com/politica', 'dataConsent']
+];
+
 let failures = 0;
 
-for (const [form, cases] of [['Salud mental', SALUD_MENTAL], ['Perspectiva de género', PERSPECTIVA_GENERO], ['Modulo 4', MODULO_4]] as const) {
+for (const [form, cases] of [['Salud mental', SALUD_MENTAL], ['Perspectiva de género', PERSPECTIVA_GENERO], ['Modulo 4', MODULO_4], ['Prevención del suicidio', PREVENCION_SUICIDIO]] as const) {
   const resolved = walk(cases.map(([title]) => title));
   resolved.forEach(({ title, id }, i) => {
     const expected = cases[i][1];

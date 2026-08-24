@@ -26,20 +26,33 @@ interface RenderedQuestion {
   title: string;
 }
 
-// The title of a question is its heading minus the "1." ordinal prefix.
+// The question title is everything in its heading that a person actually reads.
+// Three things have to come off: the "1." ordinal, the required marker, and the
+// screen-reader type hint ("Opción única.", "Texto de una sola línea."). Some
+// forms render the hint as a sibling of the heading and others nest it inside,
+// so it is stripped by its markers rather than by position.
+const TITLE_NOISE = [
+  '[data-automation-id="questionOrdinal"]',
+  '[data-automation-id="requiredStar"]',
+  '[id^="QuestionInfo_"]',
+  '[aria-hidden="true"]',
+  '[role="log"]'
+].join(', ');
+
 async function readQuestions(page: Page): Promise<RenderedQuestion[]> {
   const handles = await page.$$(QUESTION_SELECTOR);
   const questions: RenderedQuestion[] = [];
 
   for (const handle of handles) {
-    const title = await handle.evaluate((item) => {
+    const title = await handle.evaluate((item, noise) => {
       const rect = item.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return '';
-      const heading = item.querySelector('[data-automation-id="questionTitle"] [role="heading"]');
-      if (!heading) return '';
-      const ordinal = heading.querySelector('[data-automation-id="questionOrdinal"]');
-      return (heading.textContent ?? '').replace(ordinal?.textContent ?? '', '').trim();
-    });
+      const source = item.querySelector('[data-automation-id="questionTitle"]');
+      if (!source) return '';
+      const clone = source.cloneNode(true) as Element;
+      clone.querySelectorAll(noise).forEach(node => node.remove());
+      return (clone.textContent ?? '').replace(/\s+/g, ' ').trim();
+    }, TITLE_NOISE);
     if (title !== '') questions.push({ handle, title });
   }
 

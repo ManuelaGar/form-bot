@@ -14,6 +14,7 @@
     "mock:nuevo": "ts-node src/index.ts \"file://$PWD/mocks/salud-mental.html\"",
     "mock:viejo": "ts-node src/index.ts \"file://$PWD/mocks/perspectiva-genero.html\"",
     "mock:modulo4": "ts-node src/index.ts \"file://$PWD/mocks/modulo-4.html\"",
+    "mock:suicidio": "ts-node src/index.ts \"file://$PWD/mocks/prevencion-suicidio.html\"",
     "build": "tsc"
   },
   "keywords": [],

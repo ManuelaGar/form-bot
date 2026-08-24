@@ -8,6 +8,10 @@ let pageIndex = 0;
 let ordinal = 0;
 const answers = {};
 
+// Answering a gating question re-renders the form; anything else only has to
+// re-check whether the footer button is still Siguiente or now Enviar.
+const onAnswer = (q) => { if (q.gate) render(); else refreshFooter(); };
+
 const el = (tag, props = {}, children = []) => {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
@@ -19,13 +23,29 @@ const el = (tag, props = {}, children = []) => {
   return node;
 };
 
+// Two real layouts. Classic: numbered, with the screen-reader type hint as a
+// sibling of the heading. Nested: no ordinal, hint inside the heading. Both mark
+// the hint with aria-hidden and a QuestionInfo id, which is how it is stripped.
 function heading(title, typeLabel) {
+  const hint = el('span', { class: 'type-hint', id: `QuestionInfo_${ordinal}`, 'aria-hidden': 'true', text: typeLabel });
+  const text = el('span', { class: 'text-format-content', text: title });
+
+  if (FORM.nestedTitle) {
+    return el('div', { 'data-automation-id': 'questionTitle' }, [
+      el('span', { role: 'heading', 'aria-level': '2' }, [
+        text,
+        el('span', { 'data-automation-id': 'requiredStar', role: 'note', 'aria-label': 'Respuesta necesaria' }),
+        hint
+      ])
+    ]);
+  }
+
   return el('span', { 'data-automation-id': 'questionTitle' }, [
     el('span', { role: 'heading', 'aria-level': '2' }, [
       el('span', { 'data-automation-id': 'questionOrdinal', text: `${ordinal}.` }),
-      el('span', { class: 'text-format-content', text: title })
+      text
     ]),
-    el('span', { class: 'type-hint', text: typeLabel })
+    el('span', {}, [hint])
   ]);
 }
 
@@ -34,7 +54,7 @@ function textQuestion(q) {
     ? el('textarea', { 'data-automation-id': 'textInput', placeholder: 'Escriba su respuesta' })
     : el('input', { 'data-automation-id': 'textInput', placeholder: q.placeholder ?? 'Escriba su respuesta' });
   input.value = answers[q.title] ?? '';
-  input.addEventListener('input', () => { answers[q.title] = input.value; refreshFooter(); });
+  input.addEventListener('input', () => { answers[q.title] = input.value; onAnswer(q); });
   return [heading(q.title, q.multiline ? 'Texto de varias líneas.' : 'Texto de una sola línea.'), input];
 }
 
@@ -42,14 +62,14 @@ function textQuestion(q) {
 function likertQuestion(q) {
   const row = el('div', { class: 'row' });
   for (let n = q.min; n <= q.max; n++) {
-    const suffix = q.stars ? ' CheckMark' : n === q.min ? ` ${q.low}` : n === q.max ? ` ${q.high}` : '';
+    const suffix = q.starLabel ? ` ${q.starLabel}` : n === q.min ? ` ${q.low}` : n === q.max ? ` ${q.high}` : '';
     const checked = answers[q.title] === String(n);
     const option = el('div', { role: 'radio', 'aria-checked': String(checked), 'aria-label': `${n}${suffix}`, class: 'chip', text: String(n) });
     option.addEventListener('click', () => {
       row.querySelectorAll('[role="radio"]').forEach(o => o.setAttribute('aria-checked', 'false'));
       option.setAttribute('aria-checked', 'true');
       answers[q.title] = String(n);
-      refreshFooter();
+      onAnswer(q);
     });
     row.appendChild(option);
   }
@@ -65,7 +85,7 @@ function npsQuestion(q) {
     const input = el('input', { type: 'radio', role: 'radio', 'aria-label': String(n), id, name, value: String(n), class: 'nps-input' });
     if (answers[q.title] === String(n)) input.checked = true;
     const label = el('label', { for: id, class: 'nps-label', text: String(n) });
-    input.addEventListener('change', () => { answers[q.title] = String(n); refreshFooter(); });
+    input.addEventListener('change', () => { answers[q.title] = String(n); onAnswer(q); });
     row.appendChild(el('div', { 'data-automation-id': 'npsCell', role: 'presentation' }, [input, label]));
   }
   return [heading(q.title, 'Net Promoter Score.'), row];
@@ -80,7 +100,7 @@ function nativeChoiceQuestion(q) {
     const id = `${name}-${i}`;
     const input = el('input', { type: 'radio', role: 'radio', 'aria-label': text, id, name, value: text, class: 'nps-input' });
     if (answers[q.title] === text) input.checked = true;
-    input.addEventListener('change', () => { answers[q.title] = text; refreshFooter(); });
+    input.addEventListener('change', () => { answers[q.title] = text; onAnswer(q); });
     box.appendChild(el('div', { class: 'native-choice' }, [input, el('label', { for: id, text })]));
   });
   return [heading(q.title, 'Opción única.'), box];
@@ -121,7 +141,7 @@ function dropdownQuestion(q) {
         answers[q.title] = text;
         trigger.textContent = text;
         list.remove();
-        refreshFooter();
+        onAnswer(q);
       });
       list.appendChild(option);
     });
@@ -169,7 +189,7 @@ function render() {
 
   if (page.landing) {
     root.appendChild(el('p', { text: page.landing }));
-    const start = el('button', { type: 'button', text: 'Comenzar' });
+    const start = el('button', { type: 'button', text: FORM.startLabel ?? 'Comenzar' });
     start.addEventListener('click', () => { pageIndex++; render(); });
     root.appendChild(start);
     return;

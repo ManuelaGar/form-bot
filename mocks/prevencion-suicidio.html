@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Prevención del suicidio en el entorno laboral</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="renderer.js"></script>
+  <script>
+    // Read live from the form on 2026-08-24. What makes it different from every
+    // earlier form: questions carry no ordinal and the screen-reader type hint
+    // ("Opción única.") lives inside the heading instead of beside it. Its
+    // scales are also stars labelled "1 Star" where Modulo 4 says "1 CheckMark".
+    const CHECK = { starLabel: 'CheckMark', min: 1, max: 5 };
+    const STAR = { starLabel: 'Star', min: 1, max: 5 };
+
+    mountForm({
+      title: 'Prevención del suicidio en el entorno laboral',
+      nestedTitle: true,
+      startLabel: 'Empezar ahora',
+      pages: [
+        { landing: 'En ARL SURA queremos ofrecerte la mejor experiencia de formación posible. Te invitamos a responder las siguientes preguntas:' },
+        {
+          questions: [
+            { type: 'nativeChoice', required: true, gate: true, gateStops: 'Si', title: '¿Es usted una persona Sorda?', options: ['Si', 'No'] },
+            { type: 'text', required: true, title: 'Nombre y apellidos' },
+            {
+              type: 'dropdown',
+              required: true,
+              title: 'Tipo de documento',
+              options: [
+                'Cédula de ciudadanía', 'Tarjeta de identidad', 'Cédula de Extranjería', 'Registro Civil',
+                'Pasaporte', 'Carne Diplomatico', 'Permiso de Protección Temporal', 'Permiso Especial',
+                'Salvo Conducto de Permanencia', 'Permiso Especial de Trabajo'
+              ]
+            },
+            { type: 'text', required: true, title: 'Numero de documento' },
+            { type: 'text', required: true, title: 'Correo electronico' },
+            { type: 'text', required: true, title: 'Cargo' },
+            { type: 'text', required: true, title: 'Nit de la Empresa' },
+            { type: 'text', required: true, title: 'Nombre de la Empresa' },
+            { type: 'text', required: true, title: '¿En qué departamento te encuentras actualmente?' },
+            { type: 'text', required: true, title: 'Numero de celular' },
+            { type: 'likert', required: true, title: '¿Cómo calificarías la capacidad del facilitador/a para dominar el tema y resolver inquietudes?', ...CHECK },
+            { type: 'likert', required: true, title: '¿Consideras que la formación te brindó las capacidades útiles para aplicarlos en tu día a día?', ...CHECK },
+            { type: 'likert', required: true, title: '¿Las herramientas de aprendizaje fueron acordes para la apropiación del conocimiento?', ...CHECK },
+            { type: 'likert', required: true, title: 'En general, ¿qué tan satisfecho te has sentido con ARL SURA?', ...STAR },
+            { type: 'likert', required: true, title: 'En general, ¿qué tan satisfecho te sentiste con la formación ofrecida por ARL SURA?', ...STAR },
+            { type: 'likert', required: true, title: '¿Qué tan fácil o difícil fue recibir la formación ofrecida por ARL SURA?', ...STAR },
+            { type: 'nps', required: true, title: '¿Qué tan probable es que recomiendes ARL SURA a tus colegas, amigos o familiares?' },
+            { type: 'text', multiline: true, title: '¿Tienes algún comentario o sugerencia?' },
+            {
+              type: 'nativeChoice',
+              title: 'Al marcar esta casilla autorizas a SURA para tratar tus datos personales.Ingresa al siguiente link para ver las políticas de tratamiento de datos https://www.example.com/politica-tratamiento-de-datos',
+              options: ['Acepto', 'No acepto']
+            }
+          ]
+        }
+      ]
+    });
+  </script>
+</body>
+</html>
